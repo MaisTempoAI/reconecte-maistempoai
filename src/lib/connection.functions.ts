@@ -34,10 +34,24 @@ export const requestConnection = createServerFn({ method: "POST" })
       const text = await res.text();
       let payload: Record<string, unknown> = {};
       try {
-        payload = JSON.parse(text) as Record<string, unknown>;
+        const parsed: unknown = JSON.parse(text);
+        const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+        payload = (obj && typeof obj === "object" ? obj : { qrcode: text.trim() }) as Record<
+          string,
+          unknown
+        >;
       } catch {
         payload = { qrcode: text.trim() };
       }
+
+      const statusText = pickString(payload, "status", "state", "situacao") ?? "";
+      const messageText = pickString(payload, "mensagem", "message", "aviso", "detalhe");
+      const alreadyConnected =
+        payload["conectado"] === true ||
+        payload["connected"] === true ||
+        /connect|conectad|open|ativo/i.test(statusText) ||
+        (!!messageText && /conectad/i.test(messageText));
+
 
       const pair = pickString(payload, "pairCode", "pairingCode", "paircode", "code");
       if (data.device === "celular" && pair) {
