@@ -1,39 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import QRCode from "qrcode";
 
-export type DeviceType = "computador" | "celular";
+import {
+  pickString,
+  randomPairCode,
+  validateConnectionInput,
+  type ConnectionResult,
+} from "./connection-helpers";
 
-export type ConnectionResult = {
-  mode: "qrcode" | "paircode";
-  /** data URL of the QR image (mode === "qrcode") */
-  qrImage?: string;
-  /** pairing code, already normalized (mode === "paircode") */
-  pairCode?: string;
-  /** seconds until the code expires */
-  expiresIn: number;
-  demo: boolean;
-};
-
-const validate = (input: { phone: string; device: DeviceType }) => {
-  const digits = (input.phone ?? "").replace(/\D/g, "");
-  if (digits.length < 10 || digits.length > 11) {
-    throw new Error("Número inválido. Informe DDD + telefone (10 ou 11 dígitos).");
-  }
-  const device: DeviceType = input.device === "celular" ? "celular" : "computador";
-  return { phone: digits, device };
-};
-
-function randomPairCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 8; i += 1) {
-    out += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return out;
-}
+export type { ConnectionResult, DeviceType } from "./connection-helpers";
 
 export const requestConnection = createServerFn({ method: "POST" })
-  .inputValidator(validate)
+  .inputValidator(validateConnectionInput)
   .handler(async ({ data }): Promise<ConnectionResult> => {
     const base = process.env["WHATSAPP_WEBHOOK_URL"];
     const pairBase = process.env["WHATSAPP_PAIRCODE_WEBHOOK_URL"] ?? base;
@@ -58,15 +36,7 @@ export const requestConnection = createServerFn({ method: "POST" })
         payload = { qrcode: text.trim() };
       }
 
-      const pick = (...keys: string[]) => {
-        for (const k of keys) {
-          const v = payload[k];
-          if (typeof v === "string" && v.trim().length > 0) return v.trim();
-        }
-        return undefined;
-      };
-
-      const pair = pick("pairCode", "pairingCode", "paircode", "code");
+      const pair = pickString(payload, "pairCode", "pairingCode", "paircode", "code");
       if (data.device === "celular" && pair) {
         return {
           mode: "paircode",
@@ -76,7 +46,7 @@ export const requestConnection = createServerFn({ method: "POST" })
         };
       }
 
-      const raw = pick("qrcode", "qrCode", "base64", "qr", "image");
+      const raw = pickString(payload, "qrcode", "qrCode", "base64", "qr", "image");
       if (raw) {
         const qrImage = raw.startsWith("data:")
           ? raw
@@ -93,9 +63,9 @@ export const requestConnection = createServerFn({ method: "POST" })
     if (data.device === "celular") {
       return { mode: "paircode", pairCode: randomPairCode(), expiresIn: 120, demo: true };
     }
-    const qrImage = await QRCode.toDataURL(
-      `maistempo.ai/demo/${fullNumber}/${Date.now()}`,
-      { margin: 1, width: 512 },
-    );
+    const qrImage = await QRCode.toDataURL(`maistempo.ai/demo/${fullNumber}/${Date.now()}`, {
+      margin: 1,
+      width: 512,
+    });
     return { mode: "qrcode", qrImage, expiresIn: 120, demo: true };
   });
