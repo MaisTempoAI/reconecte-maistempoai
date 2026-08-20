@@ -13,13 +13,16 @@ export type { ConnectionResult, DeviceType } from "./connection-helpers";
 export const requestConnection = createServerFn({ method: "POST" })
   .inputValidator(validateConnectionInput)
   .handler(async ({ data }): Promise<ConnectionResult> => {
-    const base = process.env["WHATSAPP_WEBHOOK_URL"];
-    const pairBase = process.env["WHATSAPP_PAIRCODE_WEBHOOK_URL"] ?? base;
+    const QR_DEFAULT =
+      "https://n8n-stack-prod-n8n.pkgaq6.easypanel.host/webhook/reconecta-qr?chave=mtq2026reconecta";
+    const base = process.env["WHATSAPP_WEBHOOK_URL"] ?? QR_DEFAULT;
+    const pairBase = process.env["WHATSAPP_PAIRCODE_WEBHOOK_URL"] ?? null;
     const endpoint = data.device === "celular" ? pairBase : base;
     const fullNumber = `55${data.phone}`;
 
     if (endpoint) {
       const url = new URL(endpoint);
+      url.searchParams.set("telefone", fullNumber);
       url.searchParams.set("number", fullNumber);
       url.searchParams.set("device", data.device);
       url.searchParams.set("mode", data.device === "celular" ? "paircode" : "qrcode");

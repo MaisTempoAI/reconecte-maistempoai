@@ -1,7 +1,9 @@
 export type DeviceType = "computador" | "celular";
 
 export type ConnectionResult = {
-  mode: "qrcode" | "paircode";
+  mode: "qrcode" | "paircode" | "connected";
+  /** mensagem do servidor (ex.: número já conectado) */
+  message?: string;
   /** data URL of the QR image (mode === "qrcode") */
   qrImage?: string;
   /** pairing code, already normalized (mode === "paircode") */
