@@ -13,13 +13,16 @@ export type { ConnectionResult, DeviceType } from "./connection-helpers";
 export const requestConnection = createServerFn({ method: "POST" })
   .inputValidator(validateConnectionInput)
   .handler(async ({ data }): Promise<ConnectionResult> => {
-    const base = process.env["WHATSAPP_WEBHOOK_URL"];
-    const pairBase = process.env["WHATSAPP_PAIRCODE_WEBHOOK_URL"] ?? base;
+    const QR_DEFAULT =
+      "https://n8n-stack-prod-n8n.pkgaq6.easypanel.host/webhook/reconecta-qr?chave=mtq2026reconecta";
+    const base = process.env["WHATSAPP_WEBHOOK_URL"] ?? QR_DEFAULT;
+    const pairBase = process.env["WHATSAPP_PAIRCODE_WEBHOOK_URL"] ?? null;
     const endpoint = data.device === "celular" ? pairBase : base;
     const fullNumber = `55${data.phone}`;
 
     if (endpoint) {
       const url = new URL(endpoint);
+      url.searchParams.set("telefone", fullNumber);
       url.searchParams.set("number", fullNumber);
       url.searchParams.set("device", data.device);
       url.searchParams.set("mode", data.device === "celular" ? "paircode" : "qrcode");
@@ -31,10 +34,24 @@ export const requestConnection = createServerFn({ method: "POST" })
       const text = await res.text();
       let payload: Record<string, unknown> = {};
       try {
-        payload = JSON.parse(text) as Record<string, unknown>;
+        const parsed: unknown = JSON.parse(text);
+        const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+        payload = (obj && typeof obj === "object" ? obj : { qrcode: text.trim() }) as Record<
+          string,
+          unknown
+        >;
       } catch {
         payload = { qrcode: text.trim() };
       }
+
+      const statusText = pickString(payload, "status", "state", "situacao") ?? "";
+      const messageText = pickString(payload, "mensagem", "message", "aviso", "detalhe");
+      const alreadyConnected =
+        payload["conectado"] === true ||
+        payload["connected"] === true ||
+        /connect|conectad|open|ativo/i.test(statusText) ||
+        (!!messageText && /conectad/i.test(messageText));
+
 
       const pair = pickString(payload, "pairCode", "pairingCode", "paircode", "code");
       if (data.device === "celular" && pair) {
@@ -46,7 +63,27 @@ export const requestConnection = createServerFn({ method: "POST" })
         };
       }
 
-      const raw = pickString(payload, "qrcode", "qrCode", "base64", "qr", "image");
+      const raw = pickString(
+        payload,
+        "qrcode_base64",
+        "qrcodeBase64",
+        "qrCodeBase64",
+        "qrcode",
+        "qrCode",
+        "base64",
+        "qr",
+        "image",
+      );
+
+      if (alreadyConnected && !raw) {
+        return {
+          mode: "connected",
+          message: messageText ?? "Este número já está conectado ao servidor.",
+          expiresIn: 0,
+          demo: false,
+        };
+      }
+
       if (raw) {
         const qrImage = raw.startsWith("data:")
           ? raw
