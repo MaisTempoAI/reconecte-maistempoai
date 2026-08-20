@@ -1,17 +1,11 @@
 export type DeviceType = "computador" | "celular";
+export type ConnectionMode = "qr" | "paircode";
 
-export type ConnectionResult = {
-  mode: "qrcode" | "paircode" | "connected";
-  /** mensagem do servidor (ex.: número já conectado) */
-  message?: string;
-  /** data URL of the QR image (mode === "qrcode") */
-  qrImage?: string;
-  /** pairing code, already normalized (mode === "paircode") */
-  pairCode?: string;
-  /** seconds until the code expires */
-  expiresIn: number;
-  demo: boolean;
-};
+export type ConnectionResult =
+  | { kind: "qr"; qrImage: string; validadeSegundos: number; mensagem?: string }
+  | { kind: "paircode"; pairCode: string; validadeSegundos: number; mensagem?: string }
+  | { kind: "connected"; mensagem: string }
+  | { kind: "error"; erro: string; mensagem: string };
 
 export const validateConnectionInput = (input: { phone: string; device: DeviceType }) => {
   const digits = (input.phone ?? "").replace(/\D/g, "");
@@ -22,19 +16,84 @@ export const validateConnectionInput = (input: { phone: string; device: DeviceTy
   return { phone: digits, device };
 };
 
-export function randomPairCode() {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 8; i += 1) {
-    out += alphabet[Math.floor(Math.random() * alphabet.length)];
-  }
-  return out;
-}
-
 export function pickString(payload: Record<string, unknown>, ...keys: string[]) {
   for (const k of keys) {
     const v = payload[k];
     if (typeof v === "string" && v.trim().length > 0) return v.trim();
   }
   return undefined;
+}
+
+export function pickNumber(payload: Record<string, unknown>, key: string, fallback: number) {
+  const v = payload[key];
+  if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  if (typeof v === "string") {
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return fallback;
+}
+
+export function parseWebhookBody(text: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    const obj = Array.isArray(parsed) ? parsed[0] : parsed;
+    if (obj && typeof obj === "object") return obj as Record<string, unknown>;
+  } catch {
+    /* corpo não-JSON */
+  }
+  return {};
+}
+
+export function mapWebhookPayload(
+  payload: Record<string, unknown>,
+  mode: ConnectionMode,
+): ConnectionResult {
+  const mensagem = pickString(payload, "mensagem");
+
+  if (payload["ok"] === false) {
+    return {
+      kind: "error",
+      erro: pickString(payload, "erro") ?? "erro_desconhecido",
+      mensagem: mensagem ?? "Não foi possível concluir a solicitação. Tente de novo.",
+    };
+  }
+
+  if (payload["ja_conectado"] === true) {
+    return {
+      kind: "connected",
+      mensagem: mensagem ?? "Este número já está conectado. Nada a fazer.",
+    };
+  }
+
+  const qr = pickString(payload, "qrcode_base64");
+  if (qr) {
+    const clean = qr.replace(/\s/g, "");
+    return {
+      kind: "qr",
+      qrImage: clean.startsWith("data:") ? clean : `data:image/png;base64,${clean}`,
+      validadeSegundos: pickNumber(payload, "validade_segundos", 60),
+      ...(mensagem ? { mensagem } : {}),
+    };
+  }
+
+  const pair = pickString(payload, "paircode");
+  if (pair) {
+    return {
+      kind: "paircode",
+      pairCode: pair.toUpperCase(),
+      validadeSegundos: pickNumber(payload, "validade_segundos", 180),
+      ...(mensagem ? { mensagem } : {}),
+    };
+  }
+
+  return {
+    kind: "error",
+    erro: "resposta_invalida",
+    mensagem:
+      mensagem ??
+      (mode === "qr"
+        ? "Não recebemos o QR Code. Tente de novo."
+        : "Não recebemos o código de pareamento. Tente de novo."),
+  };
 }
