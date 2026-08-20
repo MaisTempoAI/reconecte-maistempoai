@@ -49,12 +49,12 @@ export function mapWebhookPayload(
   payload: Record<string, unknown>,
   mode: ConnectionMode,
 ): ConnectionResult {
-  const mensagem = pickString(payload, "mensagem", "message");
+  const mensagem = pickString(payload, "mensagem");
 
   if (payload["ok"] === false) {
     return {
       kind: "error",
-      erro: pickString(payload, "erro", "error") ?? "erro_desconhecido",
+      erro: pickString(payload, "erro") ?? "erro_desconhecido",
       mensagem: mensagem ?? "Não foi possível concluir a solicitação. Tente de novo.",
     };
   }
