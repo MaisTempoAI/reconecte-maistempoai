@@ -198,14 +198,30 @@ function ConnectPage() {
               <p className="text-[12px] font-medium text-destructive">{error}</p>
             )}
 
-            <button
-              type="button"
-              disabled={!isValid || loading}
-              onClick={() => (step === 1 ? setStep(2) : start())}
-              className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-brand py-3.5 text-sm font-medium text-brand-foreground shadow-sm ring-1 ring-brand transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading ? "Gerando código..." : step === 1 ? "Próximo Passo" : "Conectar"}
-            </button>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                disabled={!isValid || loading}
+                onClick={() => (step === 1 ? setStep(2) : start())}
+                className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-brand py-3.5 text-sm font-medium text-brand-foreground shadow-sm ring-1 ring-brand transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {loading ? "Gerando código..." : step === 1 ? "Próximo Passo" : "Conectar"}
+              </button>
+              {step === 2 && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setStep(1)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-[12px] py-3 text-sm font-medium text-muted-foreground ring-1 ring-border transition-colors hover:bg-secondary/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M19 12H5" />
+                    <path d="M12 19l-7-7 7-7" />
+                  </svg>
+                  Voltar
+                </button>
+              )}
+            </div>
           </div>
         )}
 
