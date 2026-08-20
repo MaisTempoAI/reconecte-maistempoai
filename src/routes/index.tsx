@@ -225,7 +225,34 @@ function ConnectPage() {
           </div>
         )}
 
-        {step === 3 && result && (
+        {step === 3 && result?.mode === "connected" && (
+          <div className="flex flex-col items-center gap-6 rounded-[20px] bg-panel p-8 text-center shadow-2xl">
+            <span className="flex size-12 items-center justify-center rounded-full bg-online/15">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-online" aria-hidden="true">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+            </span>
+            <div className="flex flex-col gap-2">
+              <h2 className="text-lg font-medium text-panel-foreground">Número já conectado</h2>
+              <p className="max-w-[32ch] text-sm text-panel-muted">
+                {result.message ?? "Este número já está conectado ao servidor."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setResult(null);
+                setError(null);
+                setStep(1);
+              }}
+              className="text-xs font-medium text-brand transition-colors hover:text-brand-foreground"
+            >
+              Conectar outro número
+            </button>
+          </div>
+        )}
+
+        {step === 3 && result && result.mode !== "connected" && (
           <div className="flex flex-col items-center gap-8 rounded-[20px] bg-panel p-8 shadow-2xl">
             <div className="flex flex-col gap-2 text-center">
               <h2 className="text-lg font-medium text-panel-foreground">
