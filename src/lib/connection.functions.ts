@@ -49,7 +49,27 @@ export const requestConnection = createServerFn({ method: "POST" })
         };
       }
 
-      const raw = pickString(payload, "qrcode", "qrCode", "base64", "qr", "image");
+      const raw = pickString(
+        payload,
+        "qrcode_base64",
+        "qrcodeBase64",
+        "qrCodeBase64",
+        "qrcode",
+        "qrCode",
+        "base64",
+        "qr",
+        "image",
+      );
+
+      if (alreadyConnected && !raw) {
+        return {
+          mode: "connected",
+          message: messageText ?? "Este número já está conectado ao servidor.",
+          expiresIn: 0,
+          demo: false,
+        };
+      }
+
       if (raw) {
         const qrImage = raw.startsWith("data:")
           ? raw
