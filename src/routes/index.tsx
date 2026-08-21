@@ -1,8 +1,34 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Laptop,
+  Loader2,
+  RefreshCw,
+  Smartphone,
+  TriangleAlert,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { BrazilFlag } from "@/components/BrazilFlag";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
 import {
   requestConnection,
   type ConnectionResult,
@@ -46,11 +72,11 @@ function formatPhone(digits: string) {
   return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
 }
 
-const QR_STEPS = [
-  "No celular, abra o WhatsApp",
-  "Toque em Configurações (ou os 3 pontinhos) > Aparelhos conectados",
-  "Toque em Conectar um aparelho",
-  "Aponte a câmera para o QR code desta tela",
+const QR_STEPS: { text: string; highlight?: boolean }[] = [
+  { text: "No celular, abra o WhatsApp" },
+  { text: "Toque em Configurações (ou os 3 pontinhos) > Aparelhos conectados" },
+  { text: "Toque em Conectar um aparelho" },
+  { text: "Aponte a câmera para o QR code desta tela" },
 ];
 
 const PAIR_STEPS: { text: string; highlight?: boolean }[] = [
@@ -68,82 +94,28 @@ const PAIR_STEPS: { text: string; highlight?: boolean }[] = [
   },
 ];
 
-function ProgressTrack({ step }: { step: 1 | 2 | 3 }) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3].map((n) => (
-        <span
-          key={n}
-          className={`h-1 w-8 rounded-full transition-colors ${
-            n <= step ? "bg-brand" : "bg-secondary"
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <span
-      className="size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-      aria-hidden="true"
-    />
-  );
-}
-
-function BackButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="-ml-2 flex items-center gap-1.5 rounded-[10px] px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M19 12H5" />
-        <path d="M12 19l-7-7 7-7" />
-      </svg>
-      Voltar
-    </button>
-  );
-}
-
 function StepList({ mode }: { mode: "qr" | "paircode" }) {
-  const items =
-    mode === "qr" ? QR_STEPS.map((text) => ({ text, highlight: false })) : PAIR_STEPS;
+  const items = mode === "qr" ? QR_STEPS : PAIR_STEPS;
   return (
     <ol className="flex w-full flex-col gap-2">
       {items.map((item, i) => (
         <li
           key={i}
-          className={`flex items-start gap-3 rounded-xl p-3 text-xs leading-relaxed ${
+          className={`flex items-start gap-3 rounded-lg border p-3 text-xs leading-relaxed ${
             item.highlight
-              ? "bg-brand/10 ring-1 ring-brand/40"
-              : "bg-panel-elevated/50"
+              ? "border-primary/40 bg-primary/5 text-foreground"
+              : "border-transparent bg-muted/50 text-muted-foreground"
           }`}
         >
-          <span
-            className={`flex size-5 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
-              item.highlight
-                ? "bg-brand text-brand-foreground"
-                : "bg-panel-border/60 text-panel-muted"
-            }`}
+          <Badge
+            variant={item.highlight ? "default" : "secondary"}
+            className="size-5 shrink-0 justify-center rounded-md p-0 text-[11px] tabular-nums"
           >
             {i + 1}
-          </span>
-          <span className={item.highlight ? "text-panel-foreground" : "text-panel-foreground/80"}>
+          </Badge>
+          <span>
             {item.highlight && (
-              <span className="mr-1.5 font-semibold uppercase tracking-wide text-brand">
+              <span className="mr-1.5 font-semibold uppercase tracking-wide text-primary">
                 Atenção:
               </span>
             )}
@@ -163,6 +135,7 @@ function ConnectPage() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [result, setResult] = useState<ConnectionResult | null>(null);
   const [remaining, setRemaining] = useState(0);
+  const [total, setTotal] = useState(0);
   const [copied, setCopied] = useState(false);
 
   const connect = useServerFn(requestConnection);
@@ -194,7 +167,9 @@ function ConnectPage() {
         return;
       }
       setResult(res);
-      setRemaining(res.kind === "qr" || res.kind === "paircode" ? res.validadeSegundos : 0);
+      const secs = res.kind === "qr" || res.kind === "paircode" ? res.validadeSegundos : 0;
+      setRemaining(secs);
+      setTotal(secs);
       setStep(3);
     } catch (e) {
       setResult({
@@ -227,281 +202,243 @@ function ConnectPage() {
     }
   }
 
-  const title =
-    step === 3
-      ? result?.kind === "paircode"
-        ? "Use o código de pareamento"
-        : result?.kind === "qr"
-          ? "Escaneie o QR Code"
-          : result?.kind === "connected"
-            ? "Número já conectado"
-            : "Não foi possível conectar"
-      : "Conecte sua conta";
+  const heading =
+    step === 1
+      ? "Conecte sua conta"
+      : step === 2
+        ? "Onde você está agora?"
+        : result?.kind === "paircode"
+          ? "Use o código de pareamento"
+          : result?.kind === "qr"
+            ? "Escaneie o QR Code"
+            : result?.kind === "connected"
+              ? "Número já conectado"
+              : "Não foi possível conectar";
+
+  const description =
+    step === 1
+      ? "Informe o número de WhatsApp da sua empresa para iniciar a integração."
+      : step === 2
+        ? "Escolha o dispositivo para gerarmos o método de conexão correto."
+        : `Número +55 ${masked}`;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4 font-sans antialiased sm:p-6 lg:p-12">
-      <div className="flex w-full max-w-[440px] flex-col gap-6 sm:gap-8">
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold uppercase tracking-tight text-foreground">
-              MaisTempo.ai
-            </span>
-            <ProgressTrack step={step} />
+    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4 font-sans antialiased sm:p-6 lg:p-10">
+      <div className="flex w-full max-w-[460px] flex-col gap-5">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold tracking-tight">MaisTempo.ai</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground tabular-nums">Passo {step} de 3</span>
+            <Progress value={(step / 3) * 100} className="h-1 w-16" />
           </div>
-
-          {step !== 1 && <BackButton onClick={() => reset(step === 3 ? 2 : 1)} />}
-
-          <header className="flex flex-col gap-2">
-            <h1 className="text-balance text-2xl font-semibold leading-tight tracking-tight text-foreground">
-              {title}
-            </h1>
-            <p className="max-w-[35ch] text-pretty text-sm text-muted-foreground">
-              {step === 1 &&
-                "Inicie a integração com o servidor inserindo o número do WhatsApp da sua empresa."}
-              {step === 2 &&
-                "Informe onde você está agora para gerarmos o método de conexão correto."}
-              {step === 3 && `Número +55 ${masked}.`}
-            </p>
-          </header>
         </div>
 
-        {step !== 3 && (
-          <div className="flex flex-col gap-8 rounded-[20px] bg-card p-6 ring-1 ring-border sm:p-8">
-            <div className="flex flex-col gap-4">
-              <label
-                htmlFor="phone"
-                className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+        <Card className="gap-6 shadow-sm">
+          <CardHeader className="gap-2">
+            {step !== 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2 mb-1 w-fit text-muted-foreground"
+                onClick={() => reset(step === 3 ? 2 : 1)}
               >
-                Número de WhatsApp
-              </label>
-              <div className="relative flex items-center">
-                <div className="absolute left-4 flex items-center gap-2 border-r border-border pr-3">
-                  <BrazilFlag />
-                  <span className="text-sm font-medium text-foreground">+55</span>
-                </div>
-                <input
-                  id="phone"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  disabled={step === 2}
-                  value={masked}
-                  aria-invalid={!!phoneError}
-                  onChange={(e) => {
-                    setPhoneError(null);
-                    setDigits(onlyDigits(e.target.value).slice(0, 11));
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && isValid && step === 1) setStep(2);
-                  }}
-                  placeholder="(11) 98765-4321"
-                  className={`w-full rounded-[12px] bg-surface py-4 pl-20 pr-4 text-base font-medium text-foreground outline-none ring-1 transition-shadow placeholder:text-muted-foreground/50 focus:ring-2 disabled:opacity-60 ${
-                    phoneError
-                      ? "ring-destructive focus:ring-destructive/40"
-                      : "ring-border focus:ring-brand/30"
-                  }`}
-                />
-              </div>
-              {phoneError ? (
-                <p className="text-[12px] font-medium text-destructive">{phoneError}</p>
-              ) : (
-                <p className="text-[12px] leading-normal text-muted-foreground">
-                  Insira apenas números. O prefixo internacional é fixo para o Brasil.
-                </p>
-              )}
-            </div>
+                <ArrowLeft />
+                Voltar
+              </Button>
+            )}
+            <CardTitle className="text-2xl tracking-tight">{heading}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </CardHeader>
 
-            <div
-              className={`flex flex-col gap-3 transition-opacity ${
-                step === 2 ? "" : "pointer-events-none opacity-40"
-              }`}
-            >
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Dispositivo
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                {(
-                  [
-                    ["computador", "Computador"],
-                    ["celular", "Celular / Tablet"],
-                  ] as const
-                ).map(([value, label]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setDevice(value)}
-                    className={`rounded-[12px] p-4 text-left transition-colors ${
-                      device === value
-                        ? "bg-surface ring-2 ring-brand"
-                        : "bg-secondary/40 ring-1 ring-border hover:ring-brand/40"
-                    }`}
-                  >
-                    <span className="block text-sm font-medium text-foreground">{label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              disabled={!isValid || loading}
-              onClick={() => (step === 1 ? setStep(2) : start())}
-              className="flex w-full items-center justify-center gap-2 rounded-[12px] bg-brand py-3.5 text-sm font-medium text-brand-foreground shadow-sm ring-1 ring-brand transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading && <Spinner />}
-              {loading ? "Gerando..." : step === 1 ? "Próximo Passo" : "Conectar"}
-            </button>
-          </div>
-        )}
-
-        {step === 3 && result?.kind === "connected" && (
-          <div className="flex flex-col items-center gap-6 rounded-[20px] bg-online/10 p-8 text-center ring-1 ring-online/40">
-            <span className="flex size-12 items-center justify-center rounded-full bg-online/20">
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-online"
-                aria-hidden="true"
-              >
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            </span>
-            <p className="max-w-[32ch] text-sm font-medium text-foreground">{result.mensagem}</p>
-            <button
-              type="button"
-              onClick={() => reset(1)}
-              className="text-xs font-medium text-brand transition-colors hover:text-brand-hover"
-            >
-              Conectar outro número
-            </button>
-          </div>
-        )}
-
-        {step === 3 && result?.kind === "error" && (
-          <div className="flex flex-col items-center gap-6 rounded-[20px] bg-card p-8 text-center ring-1 ring-destructive/40">
-            <p className="max-w-[34ch] text-sm font-medium text-foreground">{result.mensagem}</p>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={start}
-              className="flex items-center justify-center gap-2 rounded-[12px] bg-brand px-5 py-3 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand-hover disabled:opacity-50"
-            >
-              {loading && <Spinner />}
-              {loading ? "Gerando..." : "Tentar de novo"}
-            </button>
-          </div>
-        )}
-
-        {step === 3 && (result?.kind === "qr" || result?.kind === "paircode") && (
-          <div className="flex flex-col items-center gap-6 rounded-[20px] bg-panel p-6 shadow-2xl sm:p-8">
-            <div className="flex flex-col gap-2 text-center">
-              <h2 className="text-lg font-medium text-panel-foreground">
-                {result.kind === "qr" ? "Escaneie o QR Code" : "Digite o código no aparelho"}
-              </h2>
-              <p className="text-sm text-panel-muted">
-                {expired ? (
-                  result.kind === "qr" ? (
-                    "QR Code expirado."
-                  ) : (
-                    "Código expirado."
-                  )
-                ) : (
-                  <>
-                    Expira em{" "}
-                    <span className="font-medium tabular-nums text-brand">{mmss}</span>
-                  </>
-                )}
-              </p>
-            </div>
-
-            {result.kind === "qr" &&
-              (expired ? (
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={start}
-                  className="flex items-center justify-center gap-2 rounded-[12px] bg-brand px-5 py-3 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand-hover disabled:opacity-50"
-                >
-                  {loading && <Spinner />}
-                  {loading ? "Gerando..." : "Gerar novo QR"}
-                </button>
-              ) : (
-                <div className="relative rounded-[12px] bg-surface p-4">
-                  <span className="absolute -left-1 -top-1 size-6 rounded-tl-lg border-l-2 border-t-2 border-brand" />
-                  <span className="absolute -right-1 -top-1 size-6 rounded-tr-lg border-r-2 border-t-2 border-brand" />
-                  <span className="absolute -bottom-1 -left-1 size-6 rounded-bl-lg border-b-2 border-l-2 border-brand" />
-                  <span className="absolute -bottom-1 -right-1 size-6 rounded-br-lg border-b-2 border-r-2 border-brand" />
-                  <img
-                    src={result.qrImage}
-                    alt="QR Code de conexão do WhatsApp"
-                    className="size-48 rounded-[4px] sm:size-56"
+          {step === 1 && (
+            <>
+              <CardContent className="flex flex-col gap-3">
+                <Label htmlFor="phone">Número de WhatsApp</Label>
+                <div className="relative flex items-center">
+                  <span className="pointer-events-none absolute left-3 flex items-center gap-2 border-r pr-2.5">
+                    <BrazilFlag />
+                    <span className="text-sm font-medium">+55</span>
+                  </span>
+                  <Input
+                    id="phone"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    value={masked}
+                    aria-invalid={!!phoneError}
+                    onChange={(e) => {
+                      setPhoneError(null);
+                      setDigits(onlyDigits(e.target.value).slice(0, 11));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && isValid) setStep(2);
+                    }}
+                    placeholder="(11) 98765-4321"
+                    className="h-12 pl-[5.25rem] text-base font-medium md:text-base"
                   />
                 </div>
-              ))}
-
-            {result.kind === "paircode" &&
-              (expired ? (
-                <button
-                  type="button"
-                  disabled={loading}
-                  onClick={start}
-                  className="flex items-center justify-center gap-2 rounded-[12px] bg-brand px-5 py-3 text-sm font-medium text-brand-foreground transition-colors hover:bg-brand-hover disabled:opacity-50"
-                >
-                  {loading && <Spinner />}
-                  {loading ? "Gerando..." : "Gerar novo código"}
-                </button>
-              ) : (
-                <div className="flex w-full flex-col items-center gap-3">
-                  <p className="select-all break-all text-center font-mono text-3xl font-semibold tracking-[0.15em] text-panel-foreground sm:text-4xl">
-                    {result.pairCode}
+                {phoneError ? (
+                  <p className="text-xs font-medium text-destructive">{phoneError}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Insira apenas números, com DDD. O prefixo +55 é fixo para o Brasil.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => copyCode(result.pairCode)}
-                    className="rounded-[10px] border border-panel-border px-4 py-2 text-xs font-medium text-panel-foreground transition-colors hover:bg-panel-elevated"
-                  >
-                    {copied ? "Copiado!" : "Copiar"}
-                  </button>
+                )}
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" disabled={!isValid} onClick={() => setStep(2)}>
+                  Próximo passo
+                </Button>
+              </CardFooter>
+            </>
+          )}
+
+          {step === 2 && (
+            <>
+              <CardContent className="flex flex-col gap-4">
+                <Badge variant="secondary" className="gap-1.5">
+                  <BrazilFlag className="h-3 w-4" />
+                  +55 {masked}
+                </Badge>
+                <RadioGroup
+                  value={device}
+                  onValueChange={(v) => setDevice(v as DeviceType)}
+                  className="gap-3"
+                >
+                  {(
+                    [
+                      ["computador", "Computador", "Conexão por QR Code", Laptop],
+                      ["celular", "Celular / Tablet", "Conexão por código de pareamento", Smartphone],
+                    ] as const
+                  ).map(([value, label, hint, Icon]) => (
+                    <Label
+                      key={value}
+                      htmlFor={value}
+                      className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                        device === value ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <RadioGroupItem value={value} id={value} className="mt-0.5" />
+                      <Icon className="mt-0.5 size-4 text-muted-foreground" />
+                      <span className="flex flex-col gap-1">
+                        <span className="text-sm font-medium leading-none">{label}</span>
+                        <span className="text-xs font-normal text-muted-foreground">{hint}</span>
+                      </span>
+                    </Label>
+                  ))}
+                </RadioGroup>
+              </CardContent>
+              <CardFooter>
+                <Button className="w-full" disabled={loading} onClick={start}>
+                  {loading && <Loader2 className="animate-spin" />}
+                  {loading ? "Gerando..." : "Conectar"}
+                </Button>
+              </CardFooter>
+            </>
+          )}
+
+          {step === 3 && result?.kind === "connected" && (
+            <>
+              <CardContent>
+                <Alert className="border-primary/40 bg-primary/5">
+                  <Check className="text-primary" />
+                  <AlertTitle>Tudo pronto</AlertTitle>
+                  <AlertDescription>{result.mensagem}</AlertDescription>
+                </Alert>
+              </CardContent>
+              <CardFooter>
+                <Button variant="outline" className="w-full" onClick={() => reset(1)}>
+                  Conectar outro número
+                </Button>
+              </CardFooter>
+            </>
+          )}
+
+          {step === 3 && result?.kind === "error" && (
+            <>
+              <CardContent>
+                <Alert variant="destructive">
+                  <TriangleAlert />
+                  <AlertTitle>Falha na conexão</AlertTitle>
+                  <AlertDescription>{result.mensagem}</AlertDescription>
+                </Alert>
+              </CardContent>
+              <CardFooter className="gap-3">
+                <Button className="flex-1" disabled={loading} onClick={start}>
+                  {loading && <Loader2 className="animate-spin" />}
+                  {loading ? "Gerando..." : "Tentar de novo"}
+                </Button>
+                <Button variant="outline" onClick={() => reset(1)}>
+                  Alterar número
+                </Button>
+              </CardFooter>
+            </>
+          )}
+
+          {step === 3 && (result?.kind === "qr" || result?.kind === "paircode") && (
+            <>
+              <CardContent className="flex flex-col items-center gap-6">
+                <div className="flex w-full flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">
+                      {expired
+                        ? result.kind === "qr"
+                          ? "QR Code expirado"
+                          : "Código expirado"
+                        : "Expira em"}
+                    </span>
+                    {!expired && <span className="font-medium tabular-nums">{mmss}</span>}
+                  </div>
+                  <Progress value={total > 0 ? (remaining / total) * 100 : 0} className="h-1" />
                 </div>
-              ))}
 
-            <div className="w-full border-t border-panel-border pt-6">
-              <StepList mode={result.kind === "qr" ? "qr" : "paircode"} />
-            </div>
+                {expired ? (
+                  <Button disabled={loading} onClick={start}>
+                    {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                    {loading
+                      ? "Gerando..."
+                      : result.kind === "qr"
+                        ? "Gerar novo QR"
+                        : "Gerar novo código"}
+                  </Button>
+                ) : result.kind === "qr" ? (
+                  <div className="rounded-xl border bg-card p-4">
+                    <img
+                      src={result.qrImage}
+                      alt="QR Code de conexão do WhatsApp"
+                      className="size-48 rounded-sm sm:size-56"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex w-full flex-col items-center gap-3">
+                    <p className="select-all break-all text-center font-mono text-3xl font-semibold tracking-[0.15em] sm:text-4xl">
+                      {result.pairCode}
+                    </p>
+                    <Button variant="outline" size="sm" onClick={() => copyCode(result.pairCode)}>
+                      {copied ? <Check /> : <Copy />}
+                      {copied ? "Copiado!" : "Copiar código"}
+                    </Button>
+                  </div>
+                )}
 
-            <div className="flex items-center gap-6">
-              <button
-                type="button"
-                onClick={start}
-                disabled={loading}
-                className="text-xs font-medium text-brand transition-colors hover:text-brand-hover disabled:opacity-50"
-              >
-                {loading ? "Gerando..." : "Gerar novo código"}
-              </button>
-              <button
-                type="button"
-                onClick={() => reset(1)}
-                className="text-xs font-medium text-panel-muted transition-colors hover:text-panel-foreground"
-              >
-                Alterar número
-              </button>
-            </div>
-          </div>
-        )}
+                <Separator />
+                <StepList mode={result.kind === "qr" ? "qr" : "paircode"} />
+              </CardContent>
+              <CardFooter className="justify-between">
+                <Button variant="ghost" size="sm" disabled={loading} onClick={start}>
+                  {loading && <Loader2 className="animate-spin" />}
+                  {loading ? "Gerando..." : "Gerar novo código"}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => reset(1)}>
+                  Alterar número
+                </Button>
+              </CardFooter>
+            </>
+          )}
+        </Card>
 
-        <footer className="flex flex-col gap-4 border-t border-border pt-4">
-          <div className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-online" />
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Servidor estável em São Paulo (br-east)
-            </p>
-          </div>
+        <footer className="flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-primary" />
+          Servidor MaisTempo.ai ®
         </footer>
       </div>
     </main>
