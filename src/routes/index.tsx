@@ -417,7 +417,11 @@ function ConnectPage() {
                       {copied ? <Check /> : <Copy />}
                       {copied ? "Copiado!" : "Copiar código"}
                     </Button>
+                    <p className="text-center text-xs text-muted-foreground">
+                      Enviamos este mesmo código por WhatsApp para o número informado.
+                    </p>
                   </div>
+
                 )}
 
                 <Separator />
