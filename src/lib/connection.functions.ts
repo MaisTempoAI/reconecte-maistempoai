@@ -12,7 +12,7 @@ export type { ConnectionResult, ConnectionMode, DeviceType } from "./connection-
 export const requestConnection = createServerFn({ method: "POST" })
   .inputValidator(validateConnectionInput)
   .handler(async ({ data }): Promise<ConnectionResult> => {
-    const url = process.env["RECONECTA_URL"] ?? "http://46.62.202.200:8839/reconect";
+    const url = process.env["RECONECTA_URL"] ?? "https://reconecta-quepasa.pkgaq6.easypanel.host/reconect";
     const user = process.env["RECONECTA_USER"] ?? "";
     const senha = process.env["RECONECTA_SENHA"] ?? "";
     const mode = data.device === "celular" ? "paircode" : "qr";
