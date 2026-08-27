@@ -484,8 +484,12 @@ function ConnectPage() {
               <>
                 <CardContent className="flex flex-col items-center gap-6">
                   <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
-                    {verifying && <Loader2 className="size-3 animate-spin" />}
-                    <span>Aguardando você escanear pelo celular...</span>
+                    {(verifying || regenerating) && <Loader2 className="size-3 animate-spin" />}
+                    <span>
+                      {regenerating
+                        ? "Sessão reiniciada pelo servidor, gerando um novo QR..."
+                        : "Aguardando você escanear pelo celular..."}
+                    </span>
                   </div>
 
                   {result.kind === "qr" ? (
@@ -508,6 +512,18 @@ function ConnectPage() {
                       <p className="text-center text-xs text-muted-foreground">
                         Enviamos este mesmo código por WhatsApp para o número informado.
                       </p>
+                    </div>
+                  )}
+
+                  {precisaNovoQrManual && (
+                    <div className="flex w-full flex-col items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-center">
+                      <p className="text-xs font-medium text-foreground">
+                        Precisamos de um novo QR — toque para gerar
+                      </p>
+                      <Button size="sm" variant="outline" disabled={loading} onClick={start}>
+                        {loading && <Loader2 className="animate-spin" />}
+                        Gerar novo
+                      </Button>
                     </div>
                   )}
 
