@@ -10,7 +10,7 @@ import {
   Smartphone,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BrazilFlag } from "@/components/BrazilFlag";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -140,6 +140,9 @@ function ConnectPage() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [regenerating, setRegenerating] = useState(false);
+  const [precisaNovoQrManual, setPrecisaNovoQrManual] = useState(false);
+  const jaRegenerouRef = useRef(false);
 
   const connect = useServerFn(requestConnection);
   const checkStatus = useServerFn(checkConnectionStatus);
