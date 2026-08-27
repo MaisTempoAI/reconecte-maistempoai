@@ -8,8 +8,8 @@ export type ConnectionResult =
   | { kind: "error"; erro: string; mensagem: string };
 
 export type ConnectionStatus =
-  | { connected: true; estado: string; quepasakey?: string }
-  | { connected: false; estado?: string; error?: string };
+  | { connected: true; estado: string; quepasakey?: string; precisaNovoQr?: boolean }
+  | { connected: false; estado?: string; error?: string; precisaNovoQr?: boolean };
 
 export const validateConnectionInput = (input: { phone: string; device: DeviceType }) => {
   const digits = (input.phone ?? "").replace(/\D/g, "");
@@ -111,8 +111,14 @@ export function mapWebhookPayload(
 }
 
 export function mapStatusPayload(payload: Record<string, unknown>): ConnectionStatus {
+  const precisaNovoQr = payload["precisa_novo_qr"] === true;
+
   if (payload["ok"] === false) {
-    return { connected: false, error: pickString(payload, "erro") ?? "erro_desconhecido" };
+    return {
+      connected: false,
+      error: pickString(payload, "erro") ?? "erro_desconhecido",
+      ...(precisaNovoQr ? { precisaNovoQr } : {}),
+    };
   }
 
   const conectado =
@@ -124,5 +130,5 @@ export function mapStatusPayload(payload: Record<string, unknown>): ConnectionSt
     return { connected: true, estado, ...(quepasakey ? { quepasakey } : {}) };
   }
 
-  return { connected: false, estado };
+  return { connected: false, estado, ...(precisaNovoQr ? { precisaNovoQr } : {}) };
 }

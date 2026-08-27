@@ -10,7 +10,7 @@ import {
   Smartphone,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { BrazilFlag } from "@/components/BrazilFlag";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -140,6 +140,9 @@ function ConnectPage() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [regenerating, setRegenerating] = useState(false);
+  const [precisaNovoQrManual, setPrecisaNovoQrManual] = useState(false);
+  const jaRegenerouRef = useRef(false);
 
   const connect = useServerFn(requestConnection);
   const checkStatus = useServerFn(checkConnectionStatus);
@@ -165,6 +168,35 @@ function ConnectPage() {
     let cancelled = false;
     let intervalId = 0;
 
+    // O servidor pediu um QR novo (sessão limpa): regenera uma vez por ciclo.
+    const regenerate = async () => {
+      if (jaRegenerouRef.current) {
+        setPrecisaNovoQrManual(true);
+        return;
+      }
+      jaRegenerouRef.current = true;
+      setRegenerating(true);
+      await new Promise((r) => window.setTimeout(r, 1000));
+      if (cancelled) return;
+      try {
+        const res = await connect({ data: { phone: digits, device } });
+        if (cancelled) return;
+        if (res.kind === "qr" || res.kind === "paircode") {
+          setResult(res);
+          setElapsed(0);
+          setCopied(false);
+          setPrecisaNovoQrManual(false);
+          jaRegenerouRef.current = false; // QR novo exibido: reseta o flag
+        } else {
+          setPrecisaNovoQrManual(true);
+        }
+      } catch {
+        if (!cancelled) setPrecisaNovoQrManual(true);
+      } finally {
+        if (!cancelled) setRegenerating(false);
+      }
+    };
+
     const poll = async () => {
       if (cancelled || connected) return;
       setVerifying(true);
@@ -175,6 +207,8 @@ function ConnectPage() {
         if (res.connected) {
           setVerifying(false);
           window.clearInterval(intervalId);
+        } else if (res.precisaNovoQr) {
+          void regenerate();
         }
       } catch {
         /* mantém o polling silencioso */
@@ -199,6 +233,9 @@ function ConnectPage() {
     setCopied(false);
     setStatus(null);
     setElapsed(0);
+    setRegenerating(false);
+    setPrecisaNovoQrManual(false);
+    jaRegenerouRef.current = false;
     try {
       const res = await connect({ data: { phone: digits, device } });
       if (res.kind === "error" && res.erro === "numero_nao_encontrado") {
@@ -226,6 +263,9 @@ function ConnectPage() {
     setStatus(null);
     setElapsed(0);
     setCopied(false);
+    setRegenerating(false);
+    setPrecisaNovoQrManual(false);
+    jaRegenerouRef.current = false;
     if (target === 1) setPhoneError(null);
     setStep(target);
   }
@@ -444,8 +484,12 @@ function ConnectPage() {
               <>
                 <CardContent className="flex flex-col items-center gap-6">
                   <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
-                    {verifying && <Loader2 className="size-3 animate-spin" />}
-                    <span>Aguardando você escanear pelo celular...</span>
+                    {(verifying || regenerating) && <Loader2 className="size-3 animate-spin" />}
+                    <span>
+                      {regenerating
+                        ? "Sessão reiniciada pelo servidor, gerando um novo QR..."
+                        : "Aguardando você escanear pelo celular..."}
+                    </span>
                   </div>
 
                   {result.kind === "qr" ? (
@@ -468,6 +512,18 @@ function ConnectPage() {
                       <p className="text-center text-xs text-muted-foreground">
                         Enviamos este mesmo código por WhatsApp para o número informado.
                       </p>
+                    </div>
+                  )}
+
+                  {precisaNovoQrManual && (
+                    <div className="flex w-full flex-col items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-center">
+                      <p className="text-xs font-medium text-foreground">
+                        Precisamos de um novo QR — toque para gerar
+                      </p>
+                      <Button size="sm" variant="outline" disabled={loading} onClick={start}>
+                        {loading && <Loader2 className="animate-spin" />}
+                        Gerar novo
+                      </Button>
                     </div>
                   )}
 
