@@ -233,6 +233,9 @@ function ConnectPage() {
     setCopied(false);
     setStatus(null);
     setElapsed(0);
+    setRegenerating(false);
+    setPrecisaNovoQrManual(false);
+    jaRegenerouRef.current = false;
     try {
       const res = await connect({ data: { phone: digits, device } });
       if (res.kind === "error" && res.erro === "numero_nao_encontrado") {
@@ -260,6 +263,9 @@ function ConnectPage() {
     setStatus(null);
     setElapsed(0);
     setCopied(false);
+    setRegenerating(false);
+    setPrecisaNovoQrManual(false);
+    jaRegenerouRef.current = false;
     if (target === 1) setPhoneError(null);
     setStep(target);
   }
