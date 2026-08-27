@@ -10,7 +10,7 @@ import {
   Smartphone,
   TriangleAlert,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { BrazilFlag } from "@/components/BrazilFlag";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,8 +30,10 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import {
+  checkConnectionStatus,
   requestConnection,
   type ConnectionResult,
+  type ConnectionStatus,
   type DeviceType,
 } from "@/lib/connection.functions";
 
@@ -134,42 +136,78 @@ function ConnectPage() {
   const [loading, setLoading] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [result, setResult] = useState<ConnectionResult | null>(null);
-  const [remaining, setRemaining] = useState(0);
-  const [total, setTotal] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<ConnectionStatus | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
 
   const connect = useServerFn(requestConnection);
+  const checkStatus = useServerFn(checkConnectionStatus);
   const isValid = digits.length === 10 || digits.length === 11;
-  const masked = useMemo(() => formatPhone(digits), [digits]);
-  const expired = remaining <= 0;
+  const masked = formatPhone(digits);
+  const connected = status?.connected === true;
+  const stale = elapsed >= 120;
 
+  // Cronômetro de tempo decorrido (1s) enquanto aguarda conexão.
   useEffect(() => {
-    if (remaining <= 0) return;
-    const id = window.setInterval(() => setRemaining((s) => (s > 0 ? s - 1 : 0)), 1000);
+    if (step !== 3) return;
+    if (result?.kind !== "qr" && result?.kind !== "paircode") return;
+    if (connected) return;
+    const id = window.setInterval(() => setElapsed((e) => e + 1), 1000);
     return () => window.clearInterval(id);
-  }, [remaining]);
+  }, [step, result, connected]);
 
-  const mmss = `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(
-    remaining % 60,
-  ).padStart(2, "0")}`;
+  // Polling de status a cada 10s assim que o QR/pair code aparece.
+  useEffect(() => {
+    if (result?.kind !== "qr" && result?.kind !== "paircode") return;
+    if (connected) return;
+
+    let cancelled = false;
+    let intervalId = 0;
+
+    const poll = async () => {
+      if (cancelled || connected) return;
+      setVerifying(true);
+      try {
+        const res = await checkStatus({ data: { phone: digits } });
+        if (cancelled) return;
+        setStatus(res);
+        if (res.connected) {
+          setVerifying(false);
+          window.clearInterval(intervalId);
+        }
+      } catch {
+        /* mantém o polling silencioso */
+      } finally {
+        if (!cancelled && !connected) setVerifying(false);
+      }
+    };
+
+    poll();
+    intervalId = window.setInterval(poll, 10_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, digits]);
 
   async function start() {
     setLoading(true);
     setPhoneError(null);
     setCopied(false);
+    setStatus(null);
+    setElapsed(0);
     try {
       const res = await connect({ data: { phone: digits, device } });
       if (res.kind === "error" && res.erro === "numero_nao_encontrado") {
         setResult(null);
-        setRemaining(0);
         setPhoneError(res.mensagem);
         setStep(1);
         return;
       }
       setResult(res);
-      const secs = res.kind === "qr" || res.kind === "paircode" ? res.validadeSegundos : 0;
-      setRemaining(secs);
-      setTotal(secs);
       setStep(3);
     } catch (e) {
       setResult({
@@ -177,7 +215,6 @@ function ConnectPage() {
         erro: "falha_inesperada",
         mensagem: e instanceof Error ? e.message : "Não foi possível gerar o código.",
       });
-      setRemaining(0);
       setStep(3);
     } finally {
       setLoading(false);
@@ -186,7 +223,8 @@ function ConnectPage() {
 
   function reset(target: 1 | 2) {
     setResult(null);
-    setRemaining(0);
+    setStatus(null);
+    setElapsed(0);
     setCopied(false);
     if (target === 1) setPhoneError(null);
     setStep(target);
@@ -207,13 +245,15 @@ function ConnectPage() {
       ? "Conecte sua conta"
       : step === 2
         ? "Onde você está agora?"
-        : result?.kind === "paircode"
-          ? "Use o código de pareamento"
-          : result?.kind === "qr"
-            ? "Escaneie o QR Code"
-            : result?.kind === "connected"
-              ? "Número já conectado"
-              : "Não foi possível conectar";
+        : connected
+          ? "Número conectado"
+          : result?.kind === "paircode"
+            ? "Use o código de pareamento"
+            : result?.kind === "qr"
+              ? "Escaneie o QR Code"
+              : result?.kind === "connected"
+                ? "Número já conectado"
+                : "Não foi possível conectar";
 
   const description =
     step === 1
@@ -374,70 +414,89 @@ function ConnectPage() {
             </>
           )}
 
-          {step === 3 && (result?.kind === "qr" || result?.kind === "paircode") && (
+          {step === 3 && (result?.kind === "qr" || result?.kind === "paircode") && connected && (
             <>
-              <CardContent className="flex flex-col items-center gap-6">
-                <div className="flex w-full flex-col gap-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      {expired
-                        ? result.kind === "qr"
-                          ? "QR Code expirado"
-                          : "Código expirado"
-                        : "Expira em"}
-                    </span>
-                    {!expired && <span className="font-medium tabular-nums">{mmss}</span>}
-                  </div>
-                  <Progress value={total > 0 ? (remaining / total) * 100 : 0} className="h-1" />
-                </div>
-
-                {expired ? (
-                  <Button disabled={loading} onClick={start}>
-                    {loading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-                    {loading
-                      ? "Gerando..."
-                      : result.kind === "qr"
-                        ? "Gerar novo QR"
-                        : "Gerar novo código"}
-                  </Button>
-                ) : result.kind === "qr" ? (
-                  <div className="rounded-xl border bg-card p-4">
-                    <img
-                      src={result.qrImage}
-                      alt="QR Code de conexão do WhatsApp"
-                      className="size-48 rounded-sm sm:size-56"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex w-full flex-col items-center gap-3">
-                    <p className="select-all break-all text-center font-mono text-3xl font-semibold tracking-[0.15em] sm:text-4xl">
-                      {result.pairCode}
-                    </p>
-                    <Button variant="outline" size="sm" onClick={() => copyCode(result.pairCode)}>
-                      {copied ? <Check /> : <Copy />}
-                      {copied ? "Copiado!" : "Copiar código"}
-                    </Button>
-                    <p className="text-center text-xs text-muted-foreground">
-                      Enviamos este mesmo código por WhatsApp para o número informado.
-                    </p>
-                  </div>
-
-                )}
-
-                <Separator />
-                <StepList mode={result.kind === "qr" ? "qr" : "paircode"} />
+              <CardContent>
+                <Alert className="border-primary/40 bg-primary/5">
+                  <Check className="text-primary" />
+                  <AlertTitle>Número conectado com sucesso!</AlertTitle>
+                  <AlertDescription>
+                    <span className="block">{status?.estado}</span>
+                    {status?.quepasakey && (
+                      <span className="mt-1 block font-mono text-xs text-muted-foreground">
+                        quepasakey: {status.quepasakey}
+                      </span>
+                    )}
+                  </AlertDescription>
+                </Alert>
               </CardContent>
-              <CardFooter className="justify-between">
-                <Button variant="ghost" size="sm" disabled={loading} onClick={start}>
-                  {loading && <Loader2 className="animate-spin" />}
-                  {loading ? "Gerando..." : "Gerar novo código"}
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => reset(1)}>
-                  Alterar número
+              <CardFooter>
+                <Button variant="outline" className="w-full" onClick={() => reset(1)}>
+                  Conectar outro número
                 </Button>
               </CardFooter>
             </>
           )}
+
+          {step === 3 &&
+            (result?.kind === "qr" || result?.kind === "paircode") &&
+            !connected && (
+              <>
+                <CardContent className="flex flex-col items-center gap-6">
+                  <div className="flex w-full items-center gap-2 text-xs text-muted-foreground">
+                    {verifying && <Loader2 className="size-3 animate-spin" />}
+                    <span>Aguardando você escanear pelo celular...</span>
+                  </div>
+
+                  {result.kind === "qr" ? (
+                    <div className="rounded-xl border bg-card p-4">
+                      <img
+                        src={result.qrImage}
+                        alt="QR Code de conexão do WhatsApp"
+                        className="size-48 rounded-sm sm:size-56"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex w-full flex-col items-center gap-3">
+                      <p className="select-all break-all text-center font-mono text-3xl font-semibold tracking-[0.15em] sm:text-4xl">
+                        {result.pairCode}
+                      </p>
+                      <Button variant="outline" size="sm" onClick={() => copyCode(result.pairCode)}>
+                        {copied ? <Check /> : <Copy />}
+                        {copied ? "Copiado!" : "Copiar código"}
+                      </Button>
+                      <p className="text-center text-xs text-muted-foreground">
+                        Enviamos este mesmo código por WhatsApp para o número informado.
+                      </p>
+                    </div>
+                  )}
+
+                  {stale && (
+                    <div className="flex w-full flex-col items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-center">
+                      <p className="text-xs font-medium text-foreground">
+                        O QR pode ter expirado — gerar um novo?
+                      </p>
+                      <Button size="sm" variant="outline" disabled={loading} onClick={start}>
+                        {loading && <Loader2 className="animate-spin" />}
+                        Gerar novo
+                      </Button>
+                    </div>
+                  )}
+
+                  <Separator />
+                  <StepList mode={result.kind === "qr" ? "qr" : "paircode"} />
+                </CardContent>
+                <CardFooter className="justify-between">
+                  <Button variant="ghost" size="sm" disabled={loading} onClick={start}>
+                    {loading && <Loader2 className="animate-spin" />}
+                    {loading ? "Gerando..." : "Gerar novo código"}
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => reset(1)}>
+                    Alterar número
+                  </Button>
+                </CardFooter>
+              </>
+            )}
         </Card>
 
         <footer className="flex items-center justify-center gap-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
