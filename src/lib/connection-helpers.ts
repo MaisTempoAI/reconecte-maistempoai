@@ -8,8 +8,8 @@ export type ConnectionResult =
   | { kind: "error"; erro: string; mensagem: string };
 
 export type ConnectionStatus =
-  | { connected: true; estado: string; quepasakey?: string }
-  | { connected: false; estado?: string; error?: string };
+  | { connected: true; estado: string; quepasakey?: string; precisaNovoQr?: boolean }
+  | { connected: false; estado?: string; error?: string; precisaNovoQr?: boolean };
 
 export const validateConnectionInput = (input: { phone: string; device: DeviceType }) => {
   const digits = (input.phone ?? "").replace(/\D/g, "");
