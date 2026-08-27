@@ -7,6 +7,10 @@ export type ConnectionResult =
   | { kind: "connected"; mensagem: string }
   | { kind: "error"; erro: string; mensagem: string };
 
+export type ConnectionStatus =
+  | { connected: true; estado: string; quepasakey?: string }
+  | { connected: false; estado?: string; error?: string };
+
 export const validateConnectionInput = (input: { phone: string; device: DeviceType }) => {
   const digits = (input.phone ?? "").replace(/\D/g, "");
   if (digits.length < 10 || digits.length > 11) {
@@ -14,6 +18,14 @@ export const validateConnectionInput = (input: { phone: string; device: DeviceTy
   }
   const device: DeviceType = input.device === "celular" ? "celular" : "computador";
   return { phone: digits, device };
+};
+
+export const validateStatusInput = (input: { phone: string }) => {
+  const digits = (input.phone ?? "").replace(/\D/g, "");
+  if (digits.length < 10 || digits.length > 11) {
+    throw new Error("Número inválido.");
+  }
+  return { phone: digits };
 };
 
 export function pickString(payload: Record<string, unknown>, ...keys: string[]) {
@@ -96,4 +108,21 @@ export function mapWebhookPayload(
         ? "Não recebemos o QR Code. Tente de novo."
         : "Não recebemos o código de pareamento. Tente de novo."),
   };
+}
+
+export function mapStatusPayload(payload: Record<string, unknown>): ConnectionStatus {
+  if (payload["ok"] === false) {
+    return { connected: false, error: pickString(payload, "erro") ?? "erro_desconhecido" };
+  }
+
+  const conectado =
+    payload["conectado"] === true || payload["estado"] === "conectado";
+  const estado = pickString(payload, "estado") ?? (conectado ? "conectado" : "aguardando");
+  const quepasakey = pickString(payload, "quepasakey");
+
+  if (conectado) {
+    return { connected: true, estado, ...(quepasakey ? { quepasakey } : {}) };
+  }
+
+  return { connected: false, estado };
 }
