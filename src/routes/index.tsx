@@ -168,6 +168,35 @@ function ConnectPage() {
     let cancelled = false;
     let intervalId = 0;
 
+    // O servidor pediu um QR novo (sessão limpa): regenera uma vez por ciclo.
+    const regenerate = async () => {
+      if (jaRegenerouRef.current) {
+        setPrecisaNovoQrManual(true);
+        return;
+      }
+      jaRegenerouRef.current = true;
+      setRegenerating(true);
+      await new Promise((r) => window.setTimeout(r, 1000));
+      if (cancelled) return;
+      try {
+        const res = await connect({ data: { phone: digits, device } });
+        if (cancelled) return;
+        if (res.kind === "qr" || res.kind === "paircode") {
+          setResult(res);
+          setElapsed(0);
+          setCopied(false);
+          setPrecisaNovoQrManual(false);
+          jaRegenerouRef.current = false; // QR novo exibido: reseta o flag
+        } else {
+          setPrecisaNovoQrManual(true);
+        }
+      } catch {
+        if (!cancelled) setPrecisaNovoQrManual(true);
+      } finally {
+        if (!cancelled) setRegenerating(false);
+      }
+    };
+
     const poll = async () => {
       if (cancelled || connected) return;
       setVerifying(true);
@@ -178,6 +207,8 @@ function ConnectPage() {
         if (res.connected) {
           setVerifying(false);
           window.clearInterval(intervalId);
+        } else if (res.precisaNovoQr) {
+          void regenerate();
         }
       } catch {
         /* mantém o polling silencioso */
